@@ -1,0 +1,17 @@
+[project]
+name = "argsig"
+version = "0.1.0"
+description = "Signature-driven CLI: declare options in function signatures, no repeated add_argument"
+readme = "README.md"
+authors = [
+    { name = "Avery Zhou X", email = "leisure-zyf@qq.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+argsig = "argsig:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
