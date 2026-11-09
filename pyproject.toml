@@ -1,7 +1,7 @@
 [project]
 name = "argsig"
-version = "0.1.0"
-description = "Signature-driven CLI: declare options in function signatures, no repeated add_argument"
+version = "0.1.1"
+description = "Signature-driven CLI: declare options in function signatures, no repeated add_argument."
 readme = "README.md"
 authors = [
     { name = "Avery Zhou X", email = "leisure-zyf@qq.com" }
