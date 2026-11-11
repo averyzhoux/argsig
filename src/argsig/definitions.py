@@ -2,7 +2,6 @@ import argparse
 import inspect
 
 # import functools
-from cmath import isinf
 from collections.abc import Callable
 
 # import sys
@@ -81,6 +80,7 @@ class Function[**P, R]:
             # *name_or_flags: str,
             kwargs = {}
             kwargs["help"] = ""
+            kwargs["nargs"] = None
             #   type: _ActionType = ...,
             #   help: str | None = ...,
             #   default: Any = ...,
@@ -148,7 +148,7 @@ class Function[**P, R]:
                                         names.append(m)
                                 else:
                                     if m == "-":
-                                        names.append(f"-{xname}")
+                                        names.append(f"-{xname[0]}")
                                     else:
                                         names.append(m)
 
@@ -172,11 +172,24 @@ class Function[**P, R]:
                     names.append(name)
 
             # 3. 处理默认值和必填
-            if param.default is not inspect.Parameter.empty:
-                kwargs["default"] = param.default
+            if is_positioned:
+                if param.default is not inspect.Parameter.empty:
+                    if kwargs["nargs"] in ["*", "?"]:
+                        pass
+                    elif kwargs["nargs"] is None:
+                        kwargs["nargs"] = "?"
+                    else:
+                        raise TypeError(
+                            f"位置参数 {name!r} 的 nargs={kwargs['nargs']!r} 不支持默认值"
+                        )
+                    kwargs["default"] = param.default
+
             else:
-                if not type_ is bool and not is_positioned:
-                    kwargs["required"] = True
+                if param.default is not inspect.Parameter.empty:
+                    kwargs["default"] = param.default
+                else:
+                    if not type_ is bool:
+                        kwargs["required"] = True
 
             # print(names, dict(sorted(kwargs.items())))
 
