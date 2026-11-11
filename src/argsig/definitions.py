@@ -1,7 +1,8 @@
 import argparse
+import inspect
 
 # import functools
-import inspect
+from cmath import isinf
 from collections.abc import Callable
 
 # import sys
@@ -64,7 +65,7 @@ class Function[**P, R]:
             hint = hints.get(name)
             type_ = hint
             if get_origin(hint) is Annotated:
-                type_, metadata = get_args(hint)
+                type_, *_ = get_args(hint)
             types.append(type_)
         maxtypelen = len(max(t.__name__ for t in types)) + 2
 
@@ -92,57 +93,74 @@ class Function[**P, R]:
             #   metavar: str | tuple[str, ...] | None = ...,
             #   dest: str | None = ...,
             type_ = hint
-            metadata = []
+            metadatas = []
 
             # 1. 拆解 Annotated
             if get_origin(hint) is Annotated:
-                type_, metadata = get_args(hint)
+                type_, *metadatas = get_args(hint)
 
             if type_ is bool:
                 kwargs["action"] = argparse.BooleanOptionalAction
                 kwargs["default"] = False
+            elif get_origin(type_) is list:
+                (inner,) = get_args(type_)
+                kwargs["type"] = inner
+                kwargs.setdefault("nargs", "*")  # list 默认 *
+            elif type_ is list:
+                # 裸 list，没有内层类型，给兜底
+                kwargs["type"] = str  # 或干脆不设 type
+                kwargs.setdefault("nargs", "*")
             else:
                 kwargs["type"] = type_
 
             kwargs["help"] += type_.__name__.ljust(maxtypelen)
 
-            # 2. 自动推断（类型、列表、布尔）
-            for m in metadata:
-                if m in [""]:
-                    continue
+            for metadata in metadatas:
+                if isinstance(metadata, tuple):
+                    nargs, *const = metadata
+                    if nargs in ["*", "+", "?"]:
+                        kwargs["nargs"] = nargs
 
-                if isinstance(m, str):
-                    # 处理 name_or_flags
-                    if m.startswith("-"):
-                        if m.startswith("--"):
-                            if m == "--":
-                                names.append(f"--{xname}")
-                            else:
-                                names.append(m)
-                        else:
-                            if m == "-":
-                                names.append(f"-{xname}")
-                            else:
-                                names.append(m)
-
-                    # 处理 nargs
+                        if nargs == "?" and const:
+                            kwargs["const"] = const[0]
+                    elif v := {
+                        ">": argparse.REMAINDER,
+                        ">>": argparse.PARSER,
+                    }.get(nargs):
+                        kwargs["nargs"] = v
                     else:
-                        if m.isupper():
-                            kwargs["metavar"] = m
-                        else:
-                            if len(m) == 1:
-                                if m in ["*", "+", "?"]:
-                                    kwargs["nargs"] = m
-                                # if m == "~":
-                                #     kwargs["nargs"] = None
+                        assert isinstance(nargs, int)
+                        kwargs["nargs"] = nargs
+
+                if isinstance(metadata, list | set):
+                    # 2. 自动推断（类型、列表、布尔）
+                    for m in metadata:
+                        if m in [""]:
+                            continue
+
+                        if isinstance(m, str):
+                            # 处理 name_or_flags
+                            if m.startswith("-"):
+                                if m.startswith("--"):
+                                    if m == "--":
+                                        names.append(f"--{xname}")
+                                    else:
+                                        names.append(m)
+                                else:
+                                    if m == "-":
+                                        names.append(f"-{xname}")
+                                    else:
+                                        names.append(m)
+
+                            # 处理 nargs
                             else:
-                                kwargs["help"] += m
+                                if m.isupper():
+                                    kwargs["metavar"] = m
+                                else:
+                                    kwargs["help"] += m
 
-                elif isinstance(m, int):
-                    kwargs["nargs"] = m
-
-                elif isinstance(m, list):
-                    kwargs["choices"] = m
+                        elif isinstance(m, set):
+                            kwargs["choices"] = m
 
             # 处理位置参数
             is_positioned = False

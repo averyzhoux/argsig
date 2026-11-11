@@ -11,11 +11,11 @@ def foo(
     x2: Annotated[int, ["--x2", "-x"]],  # 可选参数
     x3: Annotated[int, ["METAVAR X Y"]],
     x4: Annotated[int, ["--", "-"]],
-    a: Annotated[list[int],  ["这里是help信息"]], # ("*", 123),
-    a1: Annotated[int, [[1, 2], "这里是help信息", "*"]],
+    a: Annotated[list[int], ("*", 123), ["这里是help信息"]],
+    a1: Annotated[int, [{1, 2}, "这里是help信息"]],
     b: Annotated[bool, ["这里是help信息"]],
     *,
-    c: Annotated[str, ["这里是help信息", [1, 2], 2, "?", {}]] = "",
+    c: Annotated[str, ["这里是help信息", {1, 2}, 2, {}]] = "",
     # name_or_flags: Annotated[type, nargs, list[choices], "这里是help信息", const] = default,
 ) -> bool:
     """使用说明"""
