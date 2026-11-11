@@ -1,6 +1,6 @@
 [project]
 name = "argsig"
-version = "0.1.2"
+version = "0.1.3"
 description = "A modern, signature-driven CLI framework. Auto-infer type, choices, and nargs directly from type hints and Annotated."
 readme = "README.md"
 authors = [
