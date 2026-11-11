@@ -1,18 +1,17 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
-import argsig as arg
+import argsig
 
 
-# === 测试区 ===
-@arg.Argument("v0.1.0")
+@argsig.Argument("v0.1.0")
 def foo(
     x0: Annotated[int, []],  # 位置参数
-    x1: Annotated[int, ["--", "-"]],  # 可选参数 简化
+    yy: Annotated[int, ["--", "-"]],  # 可选参数 简化
     x2: Annotated[int, ["--x2", "-x"]],  # 可选参数
     x3: Annotated[int, ["METAVAR X Y"]],
-    x4: Annotated[int, ["--", "-"]],
-    a: Annotated[list[int], ("*", 123), ["这里是help信息"]],
-    a1: Annotated[int, [{1, 2}, "这里是help信息"]],
+    zz: Annotated[int, ["--", "-"]],
+    a: Annotated[list[Literal[1, 2]], ("*", 123), [("A", "B"), "这里是help信息"]],
+    a1: Annotated[Literal[1, 2], ["--", "这里是help信息"]],
     b: Annotated[bool, ["这里是help信息"]],
     *,
     c: Annotated[str, ["这里是help信息", {1, 2}, 2, {}]] = "",

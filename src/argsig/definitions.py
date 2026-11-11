@@ -1,15 +1,10 @@
 import argparse
 import inspect
-
-# import functools
 from collections.abc import Callable
-
-# import sys
 from functools import wraps
 from typing import (
     Annotated,
-    # Any,
-    # Generic,
+    Literal,
     ParamSpec,
     TypeVar,
     get_args,
@@ -102,14 +97,28 @@ class Function[**P, R]:
             if type_ is bool:
                 kwargs["action"] = argparse.BooleanOptionalAction
                 kwargs["default"] = False
+                kwargs.pop("nargs", None)
             elif get_origin(type_) is list:
                 (inner,) = get_args(type_)
                 kwargs["type"] = inner
                 kwargs.setdefault("nargs", "*")  # list 默认 *
+                if get_origin(inner) is Literal:
+                    choices = get_args(inner)
+                    a, *_ = {type(c) for c in choices}
+                    assert not _
+                    kwargs["type"] = a
+                    kwargs["choices"] = choices
             elif type_ is list:
                 # 裸 list，没有内层类型，给兜底
                 kwargs["type"] = str  # 或干脆不设 type
                 kwargs.setdefault("nargs", "*")
+            elif get_origin(type_) is Literal:
+                choices = get_args(type_)
+                a, *_ = {type(c) for c in choices}
+                assert not _
+                type_ = a
+                kwargs["type"] = a
+                kwargs["choices"] = choices
             else:
                 kwargs["type"] = type_
 
@@ -159,8 +168,8 @@ class Function[**P, R]:
                                 else:
                                     kwargs["help"] += m
 
-                        elif isinstance(m, set):
-                            kwargs["choices"] = m
+                        elif isinstance(m, tuple) and all(isinstance(_,str) and _.isupper() for _ in m):
+                            kwargs["metavar"] = m
 
             # 处理位置参数
             is_positioned = False

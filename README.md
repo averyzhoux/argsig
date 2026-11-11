@@ -1,8 +1,13 @@
 # argsig
 
-> A minimal decorator that builds `argparse` CLIs automatically from type annotations.
+> **One object, two roles, and a more direct approach.**  
+> A function and its CLI are no longer separate things.
 
-`argsig` lets you declare command-line arguments directly in your function signature via type annotations (`Annotated`), then generates an `argparse.ArgumentParser` for you — no more boilerplate `add_argument` calls.
+`argsig` is a minimal, zero-dependency decorator that attaches a fully customizable CLI to your plain Python function — **without changing the function's calling semantics**. 
+
+Have you ever written a perfect CLI script, only to realize you can't import it as a function because it's trapped inside `parser.parse_args()`? Or written a beautiful utility function, only to dread the boilerplate of wrapping it in `argparse` just to run it from the terminal? 
+
+**`argsig` fixes the boundary.** Write the function once, and it seamlessly serves both as a pure, importable Python function and a powerful CLI entry point.
 
 ## Installation
 
@@ -10,188 +15,149 @@
 pip install argsig
 ```
 
-## Quick Start
+## One Object, Two Roles
 
 ```python
-from typing import Annotated
-import argsig as arg
+import argsig
 
-@arg.Arg
-def greet(
-    name: str,
-    count: Annotated[int, ("-c",)] = 1,
-    verbose: bool = False,
-):
-    """Print a greeting."""
-    for _ in range(count):
-        print(f"Hello, {name}!" if verbose else f"Hi, {name}")
+@argsig.Arg
+def add(a: int, b: int) -> int:
+    return a + b
 
-if __name__ == "__main__":
-    greet.run()
+add(1, 2)      # Role 1: Plain function → 3 (IDE autocompletion works perfectly)
+add.run()      # Role 2: CLI entry, parses sys.argv
+add.parser     # The CLI projection, fully customizable
 ```
+Unlike traditional CLI frameworks that hijack your function, `argsig` keeps it purely callable. Zero loss of freedom. Whatever you want to do, you can still do it. That is `argsig`.
 
-```bash
-$ python demo.py Alice -c 3
-Hi, Alice
-Hi, Alice
-Hi, Alice
+---
 
-$ python demo.py --help
-usage: demo.py [-h] [-c COUNT] [--verbose | --no-verbose] name
-```
+## 🥊 How does it compare?
 
-## How It Works
+Every existing Python CLI library forces a compromise. `argsig` is built to eliminate them.
 
-`argsig` inspects the decorated function's signature and type annotations, then configures `argparse` accordingly:
+| Feature | Click / Typer | Tyro | `argparse` | **`argsig`** |
+| :--- | :--- | :--- | :--- | :--- |
+| **Original Function Callable** | ❌ (Replaced by Command) | ✅ | ❌ (Requires manual wrap) | ✅ **(`func(1, 2)` just works)** |
+| **Zero Dependencies** | ❌ (Depends on Click) | ✅ | ✅ | ✅ **(Pure stdlib)** |
+| **Type Hint Driven** | ⚠️ (Limited DSL) | ✅ | ❌ (Manual boilerplate) | ✅ **(PEP 593 Native)** |
+| **Fine-grained argparse Control**| ❌ (Hidden) | ❌ (Extremely limited) | ✅ (All manual) | ✅ **(Via `Annotated`)** |
+| **No Wrapper/Namespace** | ❌ | ❌ (Returns Dataclass) | ❌ | ✅ **(Executes cleanly)** |
+| **Returns True Return Value** | ❌ | ❌ | ❌ | ✅ **(`return self.func(**kwargs)`)** |
 
-| Signature | Generated argument |
+### Why not Typer / Click?
+They are great frameworks, but they **hijack** your function. Once decorated, your function becomes a `Command` object. You can no longer call `add(1, 2)` directly in your code without `CliRunner`. `argsig` lets the function stay a function.
+
+### Why not Tyro?
+Tyro is an extractor. It focuses on *not touching your code at all* (`tyro.cli(func)`), which results in a complete loss of fine-grained CLI control (like custom short flags or `metavars`), and it forces you to unpack Dataclass configurations. `argsig` gives you **maximum freedom** using `Annotated` and passes arguments directly to your function.
+
+---
+
+## Type Hints as CLI Arguments
+
+`argsig` maps standard Python type hints directly to `argparse` behaviors. No custom DSL to learn.
+
+| Signature | Generated Argument |
 | --- | --- |
 | No default, non-`bool` | Positional argument |
-| `bool` type | `--flag / --no-flag` switch |
-| `list[T]` | `nargs="*"`, element type `T` |
-| Positional with default | Automatically inferred `nargs="?"` |
-| Keyword-only (after `*`) | `required` `--` option |
+| `bool` | `--flag / --no-flag` switch (`BooleanOptionalAction`) |
+| `list[T]` | `nargs="*"`, type `T` |
+| Positional with default | Auto-inferred `nargs="?"` |
+| Keyword-only (after `*`) | `required=True` |
 
-**Every parameter must have a type annotation**, otherwise a `TypeError` is raised.
+### 🌟 The `Literal` Superpower
 
-## `Annotated` Metadata
+`Literal` is natively supported and mapped directly to `argparse.choices`. You get **perfect IDE autocompletion, static type safety, and CLI validation** all at once.
 
-Metadata inside `Annotated[T, ...]` controls the argparse option. Three forms are supported:
+```python
+from typing import Annotated, Literal
+import argsig
 
-### Strings
+@argsig.Arg
+def train(
+    # Automatically becomes choices=["fast", "slow"]
+    mode: Literal["fast", "slow"] = "fast",
+    
+    # Combine `list` and `Literal` for the ultimate type safety!
+    # In the function body, `targets` is a list of strings.
+    # At the CLI, it requires exactly 2 choices from ["cpu", "gpu", "tpu"].
+    targets: Annotated[list[Literal["cpu", "gpu", "tpu"]], (2,)]
+):
+    print(f"Training on {targets} in {mode} mode.")
+```
 
-| Value | Effect |
-| --- | --- |
-| `"-x"` / `"--xxx"` | Add a short/long option name |
-| `"-"` | Auto-generate short option (first letter of param name, e.g. `-c`) |
-| `"--"` | Auto-generate long option (e.g. `--count`) |
-| `"HELP"` | Uppercase → `metavar`; lowercase → `help` text |
+Run from the terminal:
+```bash
+$ python train.py cpu tpu
+Training on ['cpu', 'tpu'] in fast mode.
 
-### Sets
+$ python train.py cpu ram
+usage: train.py [-h] [--mode {fast,slow}] TARGETS [TARGETS ...]
+train.py: error: argument targets: invalid choice: 'ram' (choose from 'cpu', 'gpu', 'tpu')
+```
 
-`{"a", "b"}` → `choices`
+---
 
-### Tuples
+## Fine-Grained Control with `Annotated`
 
-`(nargs, *const)` form, controlling `nargs` and optional `const`:
-
-| Tuple | Meaning |
-| --- | --- |
-| `("*",)` / `("+",)` / `("?",)` | Corresponding `nargs` value |
-| `("?", const)` | `nargs="?"` with `const` |
-| `(">",)` / `(">>",)` | `argparse.REMAINDER` / `argparse.PARSER` |
-| `(3,)` | Integer `nargs` |
-
-## Example
+While type hints cover 90% of the use cases, you can use `Annotated` metadata to access the **full power of `argparse`**.
 
 ```python
 from typing import Annotated
-import argsig as arg
+import argsig
 
-@arg.Argument("v0.1.0")
-def foo(
-    x0: Annotated[int, []],              # positional
-    x1: Annotated[int, ["--", "-"]],     # optional (auto --x1 / -x)
-    x2: Annotated[int, ["--x2", "-x"]],  # optional (explicit names)
-    x3: Annotated[int, ["METAVAR"]],     # positional + metavar
-    a: Annotated[list[int], ("*", 123), ["numbers to process"]],
-    a1: Annotated[int, [{1, 2}, "must be 1 or 2"]],
-    b: Annotated[bool, ["enable the switch"]],
-    *,
-    c: Annotated[str, ["help text", {1, 2}]] = "",
+@argsig.Argument(version="v0.1.0")
+def main(
+    files: Annotated[list[str], ("+",), ["Files to process"]],
+    output: Annotated[str, ["--out", "-o", "OUTPUT"]], # Custom flags and metavar
+    threshold: Annotated[int, ("?", 10)],             # nargs="?" and const=10
 ):
-    """Usage notes."""
-    print(f"a={a}, b={b}, c={c}")
-
-if __name__ == "__main__":
-    foo.run()
-```
-
-```bash
-$ python demo.py --help
-usage: demo.py [-h] [-v] [--x1 X1] [--x2 X] METAVAR [A ...] [{1,2}] [--b | --no-b] [-c C] X0
-
-$ python demo.py 10 20 30 -- -1
-```
-
-## API
-
-### `Arg`
-
-```python
-def Arg[**P, R](func: Callable[P, R]) -> Function[P, R]
-```
-
-Decorate a function directly:
-
-```python
-@Arg
-def main(name: str): ...
-```
-
-### `Argument(version="")`
-
-```python
-def Argument(version: str = ""):
+    """Process files."""
     ...
 ```
 
-Decorator factory with a version string. When `version` is supplied, a `-v/--version` option is added:
+### Metadata Cheat Sheet
 
-```python
-@Argument(version="1.0.0")
-def main(name: str): ...
-```
-
-### `Function`
-
-The decorated object:
-
-- `func.parser` — the underlying `argparse.ArgumentParser`, open for further customization
-- `func.run()` — parses `sys.argv` and calls the original function with keyword arguments
-- `func(*args, **kwargs)` — calls the original function directly (no CLI parsing)
-
-```python
-@Arg
-def add(a: int, b: int):
-    return a + b
-
-add(1, 2)     # direct call, returns 3
-add.run()     # parse from command line
-add.parser.print_help()
-```
-
-## Help Text
-
-A custom `RawHelpFormatter` is used by default, which does not auto-wrap help text — handy for longer descriptions:
-
-```python
-x: Annotated[str, ("NAME", "A user name with a description long enough that it would otherwise be wrapped")]
-```
-
-## Metadata Cheat Sheet
-
-| `Annotated` metadata | Corresponding `add_argument` |
+| Metadata inside `Annotated` | Effect |
 | --- | --- |
-| `"-x"` / `"--xxx"` | `*name_or_flags` |
-| `"HELP"` (uppercase) | `metavar` |
-| `"help"` (lowercase) | `help` |
-| `{...}` | `choices` |
-| `("*", "+", "?")` | `nargs` |
-| `("?", const)` | `nargs` + `const` |
-| `(">",)` / `(">>",)` | `nargs=REMAINDER` / `PARSER` |
-| `(int,)` | integer `nargs` |
-| `bool` type | `action=BooleanOptionalAction`, `default=False` |
-| `list[T]` | `type=T`, `nargs="*"` |
-| Parameter default | `default` |
-| Keyword param without default | `required=True` |
+| `"-x"` / `"--xxx"` | Add short/long option names |
+| `"-"` | Auto-generate short option (e.g., `-f`) |
+| `"--"` | Auto-generate long option (e.g., `--flag`) |
+| `"HELP"` (Uppercase) | `metavar` |
+| `"help"` (Lowercase) | `help` text |
+| `{...}` (Set) | `choices` |
+| `(nargs, *const)` (Tuple) | Set `nargs` (e.g., `"*"`, `"+"`, `"?"`, `2`) and optional `const` |
+| `("A", "B")` (Tuple of uppercase) | Multiple `metavars` (e.g., for `nargs=2`) |
+| `(">",)` / `(">>",)` | `argparse.REMAINDER` / `argparse.PARSER` |
+
+---
+
+## API Reference
+
+### `@argsig.Arg`
+Decorates a function directly.
+```python
+@argsig.Arg
+def main(): ...
+```
+
+### `@argsig.Argument(version="")`
+Decorates a function and automatically adds a `-v/--version` option.
+```python
+@argsig.Argument("1.0.0")
+def main(): ...
+```
+
+### The `Function` Object
+- `func.parser`: The underlying `argparse.ArgumentParser`. You can add custom arguments, subparsers, or change the formatter.
+- `func.run()`: Parses `sys.argv`, calls the original function, and returns its raw return value.
+- `func(*args, **kwargs)`: Directly calls the original function (bypassing CLI parsing). Fully understood by IDEs.
 
 ## Limitations
 
-- All parameters must be type-annotated (missing → `TypeError`)
-- Positional parameters with defaults only support `nargs` of `None`, `"?"`, or `"*"`; other combinations raise `TypeError`
-- `bool` parameters default to `False` (`BooleanOptionalAction` semantics)
-- Requires Python 3.12+ (uses PEP 695 generic syntax `class Function[**P, R]`)
+- Requires **Python 3.12+** (uses PEP 695 generic syntax `class Function[**P, R]`).
+- All parameters must be type-annotated.
+- Positional parameters with defaults only support `nargs` of `None`, `"?"`, or `"*"`.
 
 ## License
 
