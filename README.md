@@ -168,6 +168,46 @@ Sub-sub bar running!
 
 ---
 
+## The "Shadow Testing" Superpower
+
+Testing a CLI script in Python is historically painful. Traditional frameworks either replace your function with a `Command` object, or call `sys.exit()`, forcing you to wrestle with `subprocess`, `mock.patch`, or `CliRunner`.
+
+**`argsig` introduces Shadow Testing.** 
+
+Because `argsig` never hijacks your function and `run()` returns the raw result, you can create a temporary "shadow" file to wrap and test your original CLI without touching a single line of production code.
+
+### `main.py` (The Original Script)
+```python
+import argsig
+
+@argsig.Arg
+def process(files: list[str]) -> dict:
+    print(f"Processing {len(files)} files...")
+    return {"status": "ok", "processed": len(files)}
+```
+
+### `shadow_test.py` (The Temporary Wrapper)
+```python
+from main import process
+
+if __name__ == "__main__":
+    # Intercept the CLI execution and capture the raw return value
+    result = process.run()
+    
+    # Inspect, format, or debug the result
+    import pprint
+    pprint.pprint(result)
+```
+
+### Why Shadow Testing is Unique to `argsig`:
+- **Zero Pollution**: Keep your production files clean. No temporary `print()` statements to clean up later.
+- **No Execution Traps**: We don't kill your process with `sys.exit()`. The execution flows right back to your shadow file.
+- **True Return Values**: Get exactly what your function returns, not just terminal output strings.
+
+*This is a capability no other Python CLI framework provides.*
+
+---
+
 ## API Reference
 
 ### `@argsig.Arg`
