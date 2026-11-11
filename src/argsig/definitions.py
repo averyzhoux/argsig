@@ -1,5 +1,6 @@
 import argparse
 import inspect
+import sys
 from collections.abc import Callable
 from functools import wraps
 from typing import (
@@ -16,43 +17,74 @@ from typing import (
 P = ParamSpec("P")
 R = TypeVar("R")
 
+P2 = ParamSpec("P2")
+R2 = TypeVar("R2")
+
 
 class RawHelpFormatter(argparse.HelpFormatter):
     def _split_lines(self, text, width):
         return [text]
 
 
+class ZArgumentParser(argparse.ArgumentParser):
+    pass
+
+
 # 关键修复：必须显式继承 Generic[P, R]
 class Function[**P, R]:
-    def __init__(self, func: Callable[P, R], v="") -> None:
+    def __init__(
+        self,
+        func: Callable[P, R],
+        v="",
+        *,
+        depth=1,
+        parser: argparse.ArgumentParser | None = None,
+    ) -> None:
         self.func = func
+        self.depth = depth
+        self.parser = parser
         # 把原函数的名称、文档字符串等元数据复制给实例，方便终端打印或调试
         wraps(func)(self)
+        self._sub_parsers_dest_name = "__ARGSIG_SUBS_DEST__"
 
+        if self.parser is None:
+            self.parser = argparse.ArgumentParser(
+                description=self.func.__doc__,
+                formatter_class=RawHelpFormatter,
+            )
+        self.subparsers = None
+        self.subs: dict[str, Function] = {}
         self.register(v)
 
-    # def Arg[**P, R](func: Callable[P, R]) -> Function[P, R]:
+    # def Arg[**P, R](func: Callable[P, R]) -> "Function[P, R]":
     #     return Function(func)
 
-    # def Argument(self,version: str = ""):
-    #     def Arg_[**P, R](func: Callable[P, R]) -> Function[P, R]:
-    #         f = Function(func, version)
-    #         这里挂上去
-    #         return f
+    def Argument(self, version: str = ""):
+        def Arg_[**P2, R2](func: Callable[P2, R2]) -> Function[P2, R2]:
+            assert self.parser
+            if self.subparsers is None:
+                self.subparsers = self.parser.add_subparsers(
+                    dest=self._sub_parsers_dest_name
+                )
+            parser = self.subparsers.add_parser(func.__name__)
+            f = Function(func, version, parser=parser, depth=self.depth + 1)
+            self.subs[func.__name__] = f
+            return f
 
-    #     return Arg_
+        return Arg_
 
     def register(self, v):
 
         sig = inspect.signature(self.func)
         hints = get_type_hints(self.func, include_extras=True)
-        self.parser = parser = argparse.ArgumentParser(
-            description=self.func.__doc__,
-            formatter_class=RawHelpFormatter,
-        )
+        parser = self.parser
+        assert parser
 
         if v:
             parser.add_argument("-v", "--version", action="version", version=v)
+
+        if not sig.parameters:
+            return
 
         types = []
         for name, param in sig.parameters.items():
@@ -168,7 +200,9 @@ class Function[**P, R]:
                                 else:
                                     kwargs["help"] += m
 
-                        elif isinstance(m, tuple) and all(isinstance(_,str) and _.isupper() for _ in m):
+                        elif isinstance(m, tuple) and all(
+                            isinstance(_, str) and _.isupper() for _ in m
+                        ):
                             kwargs["metavar"] = m
 
             # 处理位置参数
@@ -208,10 +242,14 @@ class Function[**P, R]:
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         return self.func(*args, **kwargs)
 
-    def run(self):
-        args = self.parser.parse_args()
+    def run(self) -> R:
+        args = self.parser.parse_args(sys.argv[self.depth :])  # type: ignore
         kwargs = vars(args)
-        return self.func(**kwargs)  # type: ignore
+        if subcmd := kwargs.pop(self._sub_parsers_dest_name, None):
+            child = self.subs[subcmd]
+            return child.run()
+        else:
+            return self.func(**kwargs)  # type: ignore
 
 
 def Arg[**P, R](func: Callable[P, R]) -> Function[P, R]:

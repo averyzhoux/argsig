@@ -32,7 +32,7 @@ Unlike traditional CLI frameworks that hijack your function, `argsig` keeps it p
 
 ---
 
-## 🥊 How does it compare?
+## How does it compare?
 
 Every existing Python CLI library forces a compromise. `argsig` is built to eliminate them.
 
@@ -129,6 +129,42 @@ def main(
 | `(nargs, *const)` (Tuple) | Set `nargs` (e.g., `"*"`, `"+"`, `"?"`, `2`) and optional `const` |
 | `("A", "B")` (Tuple of uppercase) | Multiple `metavars` (e.g., for `nargs=2`) |
 | `(">",)` / `(">>",)` | `argparse.REMAINDER` / `argparse.PARSER` |
+
+---
+
+## Infinite Subcommands
+
+`argsig` supports nested subcommands out-of-the-box. Just use `@your_function.Argument()` to register subcommands. It handles `sys.argv` routing seamlessly via dynamic depth slicing, ensuring your nested commands parse perfectly.
+
+```python
+import argsig
+
+@argsig.Arg
+def main(verbose: bool = False):
+    """The main command."""
+    print(f"Main running, verbose={verbose}")
+
+@main.Argument()
+def subfoo():
+    """A subcommand."""
+    print("Sub foo running!")
+    
+@subfoo.Argument()
+def subsubbar():
+    """A deeper subcommand."""
+    print("Sub-sub bar running!")
+
+if __name__ == "__main__":
+    main.run()
+```
+
+```bash
+$ python script.py subfoo
+Sub foo running!
+
+$ python script.py subfoo subsubbar
+Sub-sub bar running!
+```
 
 ---
 

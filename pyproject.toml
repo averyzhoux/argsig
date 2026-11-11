@@ -1,6 +1,6 @@
 [project]
 name = "argsig"
-version = "0.1.4"
+version = "0.1.5"
 description = "One object, two roles, and a more direct approach. A function and its CLI are no longer separate things."
 readme = "README.md"
 authors = [
