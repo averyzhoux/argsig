@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>argsig — One Object, Two Roles</title>
+<style>
+  :root { --fg:#1a1a1a; --muted:#666; --bg:#fff; --accent:#0b6e4f; --code-bg:#f5f5f5; --border:#e0e0e0; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+         color:var(--fg); background:var(--bg); line-height:1.65; }
+  .wrap { max-width:820px; margin:0 auto; padding:48px 24px 80px; }
+  header { text-align:center; margin-bottom:48px; }
+  h1 { font-size:2.6rem; margin:0 0 8px; letter-spacing:-0.02em; }
+  .tagline { color:var(--muted); font-size:1.1rem; margin:0 0 20px; }
+  .badge { display:inline-block; background:var(--accent); color:#fff; padding:6px 14px;
+           border-radius:20px; font-size:.85rem; font-weight:600; }
+  h2 { font-size:1.5rem; margin:44px 0 12px; padding-bottom:6px; border-bottom:2px solid var(--border); }
+  p { margin:12px 0; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  pre { background:var(--code-bg); padding:16px 18px; border-radius:8px; overflow-x:auto;
+        font-size:.9rem; line-height:1.5; border:1px solid var(--border); }
+  code { font-family:"SF Mono",Consolas,"Liberation Mono",Menlo,monospace; font-size:.9em; }
+  :not(pre) > code { background:var(--code-bg); padding:2px 6px; border-radius:4px; }
+  table { width:100%; border-collapse:collapse; margin:16px 0; font-size:.9rem; }
+  th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); }
+  th { background:var(--code-bg); font-weight:600; }
+  .check { color:var(--accent); font-weight:700; }
+  .cross { color:#c0392b; }
+  ul { padding-left:22px; }
+  li { margin:6px 0; }
+  footer { margin-top:64px; text-align:center; color:var(--muted); font-size:.85rem;
+           border-top:1px solid var(--border); padding-top:24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>argsig</h1>
+  <p class="tagline">One object, two roles, and a more direct approach.<br>
+     A function and its CLI are no longer separate things.</p>
+  <span class="badge">Zero-dependency · Pure stdlib</span>
+</header>
+
+<p><code>argsig</code> is a minimal, zero-dependency decorator that attaches a fully customizable CLI
+to your plain Python function — <strong>without changing the function's calling semantics</strong>.</p>
+
+<p>Write the function once, and it seamlessly serves both as a pure, importable Python function
+and a powerful CLI entry point.</p>
+
+<pre><code>pip install argsig</code></pre>
+
+<h2>One Object, Two Roles</h2>
+<pre><code>import argsig
+
+@argsig.Arg
+def add(a: int, b: int) -&gt; int:
+    return a + b
+
+add(1, 2)      # Role 1: Plain function → 3
+add.run()      # Role 2: CLI entry, parses sys.argv
+add.parser     # The CLI projection, fully customizable</code></pre>
+
+<h2>How does it compare?</h2>
+<table>
+  <tr><th>Feature</th><th>Click / Typer</th><th>Tyro</th><th>argparse</th><th>argsig</th></tr>
+  <tr><td>Original function callable</td><td class="cross">✗</td><td class="check">✓</td><td class="cross">✗</td><td class="check">✓</td></tr>
+  <tr><td>Zero dependencies</td><td class="cross">✗</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+  <tr><td>Type-hint driven</td><td>⚠️</td><td class="check">✓</td><td class="cross">✗</td><td class="check">✓</td></tr>
+  <tr><td>Fine-grained argparse control</td><td class="cross">✗</td><td class="cross">✗</td><td class="check">✓</td><td class="check">✓</td></tr>
+  <tr><td>No wrapper / namespace</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="check">✓</td></tr>
+  <tr><td>Returns true return value</td><td class="cross">✗</td><td class="cross">✗</td><td class="cross">✗</td><td class="check">✓</td></tr>
+</table>
+
+<h2>Type Hints as CLI Arguments</h2>
+<ul>
+  <li><code>bool</code> → <code>--flag / --no-flag</code> switch</li>
+  <li><code>list[T]</code> → <code>nargs="*"</code></li>
+  <li><code>Literal[...]</code> → <code>argparse.choices</code> (IDE autocompletion + validation)</li>
+  <li>Keyword-only → <code>required=True</code></li>
+</ul>
+
+<h2>Infinite Subcommands</h2>
+<pre><code>@argsig.Arg
+def main(verbose: bool = False): ...
+
+@main.Argument()
+def subfoo(): ...
+
+@subfoo.Argument()
+def subsubbar(): ...
+
+if __name__ == "__main__":
+    main.run()</code></pre>
+
+<h2>Shadow Testing</h2>
+<p>Because <code>run()</code> returns the raw result and never hijacks your function, you can wrap
+and test a CLI without touching production code:</p>
+<pre><code>from main import process
+result = process.run()   # capture the true return value</code></pre>
+
+<h2>Limitations</h2>
+<ul>
+  <li>Requires <strong>Python 3.12+</strong> (PEP 695 generic syntax).</li>
+  <li>All parameters must be type-annotated.</li>
+  <li>Positional parameters with defaults only support <code>nargs</code> of <code>None</code>, <code>"?"</code>, or <code>"*"</code>.</li>
+</ul>
+
+<footer>
+  MIT License · <a href="https://pypi.org/project/argsig/">PyPI</a>
+</footer>
+
+</div>
+</body>
+</html>
