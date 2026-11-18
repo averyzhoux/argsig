@@ -3,6 +3,7 @@ import inspect
 import sys
 import types
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import wraps
 from typing import (
     Annotated,
@@ -16,6 +17,18 @@ from typing import (
 from .consts import *
 
 MISSING = object()
+
+
+@dataclass
+class ParameterSpec:
+    name: str  # Python 参数名，如 "output"
+    flags: list[str]  # 传给 add_argument 的 name_or_flags，如 ["--out", "-o"]
+    kwargs: dict  # add_argument 的其余关键字参数
+    dest: str  # Namespace 里的键，通常等于 name
+    positional: bool  # True=位置参数，False=可选参数
+    group: Group | None = None       # 互斥组/参数组
+
+    def add_to_parser(self): ...
 
 
 def parse_markers(markers: set):
